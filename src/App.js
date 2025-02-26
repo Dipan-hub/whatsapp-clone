@@ -401,6 +401,7 @@ function ChatBar({ phone }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: phone, message: trimmed })
       });
+      
       const data = await res.json();
       if (data.success) {
         console.log('ChatBar: Message sent & logged to Google Sheet:', data);
