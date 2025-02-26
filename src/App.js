@@ -7,6 +7,8 @@ import './App.css';
 const GOOGLE_SHEET_API_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTWIWIzWFFYoBbxvBHPDfRl0tP-sNfnZ2ipIdvC6st_vSgXuLYDACGVq_0r5SAf0pUL4VJK81HuQ0tL/pub?output=csv';
 
+let lastFetchedTimestamp = 0; // Store the timestamp of the most recent fetch
+
 // Format time in IST (e.g., "09:15 pm")
 function formatTimeIST(timestamp) {
   const date = new Date(Number(timestamp) * 1000);
@@ -83,7 +85,7 @@ function App() {
   const [selectedPhone, setSelectedPhone] = useState(null);
   const isMobile = useMediaQuery({ maxWidth: 768 });
 
-  // Updated fetchMessages without caching logic
+  // Updated fetchMessages with timestamp comparison
   const fetchMessages = async () => {
     console.log('fetchMessages: Starting to fetch messages...');
     try {
@@ -98,10 +100,20 @@ function App() {
       console.log('fetchMessages: Parsed data (count ' + data.length + '):', data);
       const transformed = transformMessages(data);
       console.log('fetchMessages: Transformed data (count ' + transformed.length + '):', transformed);
-      
-      // Always update state with the fetched data
-      setMessages(transformed);
-      setLoading(false);
+
+      // Check the timestamp of the most recent message fetched
+      const latestMessageTimestamp = Math.max(...transformed.map(msg => Number(msg.Time)));
+      console.log('Latest message timestamp:', latestMessageTimestamp);
+
+      // If the latest message timestamp is greater than the last fetched timestamp, update the state
+      if (latestMessageTimestamp > lastFetchedTimestamp) {
+        console.log('New data detected, updating state.');
+        lastFetchedTimestamp = latestMessageTimestamp;  // Update the timestamp
+        setMessages(transformed);
+        setLoading(false);
+      } else {
+        console.log('No new data detected, skipping update.');
+      }
     } catch (error) {
       console.error('fetchMessages: Error fetching messages:', error);
     }
@@ -113,7 +125,7 @@ function App() {
     const interval = setInterval(() => {
       console.log('Polling for new messages...');
       fetchMessages();
-    }, 30000);
+    }, 5000); // Poll every 30 seconds
     return () => {
       clearInterval(interval);
       console.log('App unmounted. Stopped polling.');
@@ -160,6 +172,7 @@ function App() {
     </div>
   );
 }
+
 
 function ConversationsPanel({ messages, loading, selectedPhone, onSelectPhone, onManualRefresh }) {
   console.log('ConversationsPanel: messages:', messages);
