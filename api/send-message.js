@@ -40,9 +40,14 @@ module.exports = async (req, res) => {
   try {
     const sendResult = await sendWhatsAppMessage(to, message);
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    //await addRowToSheet([ADMIN_NUMBER, `${to} - ${message}`, timestamp, "1"], SHEET_ID);
-    await addRowToSheet([to, message, timestamp, "1"], SHEET_ID);
-    console.log('send-message.js: Message logged to Google Sheet.');
+    // Add the row to Google Sheets (on Heroku side)
+    await axios.post('https://heroku-whatsapp-bot-523b3af77ed7.herokuapp.com/api/update-sheet', {
+      phone: to,
+      message: message,
+      timestamp: new Date().toISOString(),
+      isOutbound: '1' // outgoign message
+    });
+    console.log('Message logged to Google Sheet on Heroku.');
     return res.status(200).json({ success: true, result: sendResult });
   } catch (error) {
     console.error('send-message.js: Error:', error);
