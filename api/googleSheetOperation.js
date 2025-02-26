@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 
 function loadCredentials() {
+  console.log('process.env.GOOGLE_CREDENTIALS:', process.env.GOOGLE_CREDENTIALS ? 'Found' : 'Not Found');
+
   if (process.env.GOOGLE_CREDENTIALS) {
     console.log('Loading Google credentials from environment variable.');
     try {
