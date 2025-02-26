@@ -7,12 +7,13 @@ module.exports = async (req, res) => {
     body: req.body,
     query: req.query,
   });
+  if (req.method === 'GET') {
+    return res.status(200).send("GET is not supported for production; use POST.");
+  }
   if (req.method !== 'POST') {
     return res.status(405).send("Method Not Allowed");
   }
-  // You can optionally do additional validation (e.g., check a secret)
   const { timestamp } = req.body;
   console.log('trigger-update.js: New update triggered at timestamp:', timestamp);
-  // For now, simply respond success.
   res.status(200).json({ success: true, timestamp });
 };
