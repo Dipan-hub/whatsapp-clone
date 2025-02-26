@@ -61,11 +61,9 @@ function getDateLabel(timestamp) {
 }
 
 /**
- * New transformation function:  
- * Simply convert each row into an object.  
- * If an "isOutbound" field exists, use it; else default to "0".
+ * Transform each CSV row into an object.
+ * Uses the isOutbound field if available; defaults to "0".
  */
-// New transformation: simply convert each row into an object, using the isOutbound field if available.
 function transformMessages(rawData) {
   const transformed = [];
   rawData.forEach((row) => {
@@ -73,109 +71,20 @@ function transformMessages(rawData) {
       Phone: row.Phone,
       Message: row.Message,
       Time: row.Time,
-      isOutbound: row.isOutbound || '0'  // default to "0" (inbound) if not provided
+      isOutbound: row.isOutbound || '0'
     });
   });
   return transformed;
 }
-/*
-function App() {
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedPhone, setSelectedPhone] = useState(null);
-  const isMobile = useMediaQuery({ maxWidth: 768 });
-
-  const fetchMessages = async () => {
-    console.log('fetchMessages: Starting to fetch messages...');
-    try {
-      const response = await fetch(GOOGLE_SHEET_API_URL);
-      console.log('fetchMessages: Response received', response);
-      const csvText = await response.text();
-      console.log('fetchMessages: CSV text (first 100 chars):', csvText.slice(0, 100) + '...');
-      const { data, errors } = Papa.parse(csvText, { header: true });
-      if (errors.length) {
-        console.error('fetchMessages: Errors parsing CSV:', errors);
-      }
-      console.log('fetchMessages: Parsed data:', data);
-      const transformed = transformMessages(data);
-      console.log('fetchMessages: Transformed data:', transformed);
-      setMessages(transformed);
-      setLoading(false);
-    } catch (error) {
-      console.error('fetchMessages: Error fetching messages:', error);
-    }
-  };
-
-  useEffect(() => {
-    console.log('App mounted. Fetching initial data...');
-    fetchMessages();
-    const interval = setInterval(() => {
-      console.log('Polling for new messages...');
-      fetchMessages();
-    }, 5000);
-    return () => {
-      clearInterval(interval);
-      console.log('App unmounted. Stopped polling.');
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === 'Escape') {
-        console.log('Escape key pressed, deselecting conversation...');
-        setSelectedPhone(null);
-      }
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, []);
-
-  const handleManualRefresh = () => {
-    console.log('Manual refresh triggered');
-    fetchMessages();
-  };
-
-  const conversationPanelStyle = { display: isMobile && selectedPhone ? 'none' : 'flex' };
-  const chatPanelStyle = { display: isMobile && !selectedPhone ? 'none' : 'flex' };
-
-  return (
-    <div className="app-container">
-      <div className="conversations-panel" style={conversationPanelStyle}>
-        <ConversationsPanel
-          messages={messages}
-          loading={loading}
-          selectedPhone={selectedPhone}
-          onSelectPhone={setSelectedPhone}
-          onManualRefresh={handleManualRefresh}
-        />
-      </div>
-      <div className="chat-panel" style={chatPanelStyle}>
-        <ChatPanel messages={messages} phone={selectedPhone} onClose={() => setSelectedPhone(null)} />
-      </div>
-    </div>
-  );
-}
-  */
-
 
 function App() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPhone, setSelectedPhone] = useState(null);
   const isMobile = useMediaQuery({ maxWidth: 768 });
-  
-  // Cache for last maximum timestamp and last fetch time (in milliseconds)
-  const lastMaxTimestamp = useRef(null);
-  const lastFetchTime = useRef(0);
 
+  // Updated fetchMessages without caching logic
   const fetchMessages = async () => {
-    const now = Date.now();
-    if (now - lastFetchTime.current < 30000) { // less than 30 sec since last fetch
-      console.log(`fetchMessages: Last fetch was ${Math.floor((now - lastFetchTime.current)/1000)} sec ago. Skipping fetch.`);
-      return;
-    }
-    lastFetchTime.current = now;
-    
     console.log('fetchMessages: Starting to fetch messages...');
     try {
       const response = await fetch(GOOGLE_SHEET_API_URL);
@@ -189,20 +98,9 @@ function App() {
       console.log('fetchMessages: Parsed data (count ' + data.length + '):', data);
       const transformed = transformMessages(data);
       console.log('fetchMessages: Transformed data (count ' + transformed.length + '):', transformed);
-
-      const newMaxTimestamp = transformed.reduce((max, row) => {
-        const t = Number(row.Time);
-        return t > max ? t : max;
-      }, 0);
-      console.log('fetchMessages: New max timestamp:', newMaxTimestamp);
-
-      if (lastMaxTimestamp.current && newMaxTimestamp <= lastMaxTimestamp.current) {
-        console.log('fetchMessages: No new data since last fetch. Skipping state update.');
-      } else {
-        console.log('fetchMessages: New data detected! Updating state.');
-        lastMaxTimestamp.current = newMaxTimestamp;
-        setMessages(transformed);
-      }
+      
+      // Always update state with the fetched data
+      setMessages(transformed);
       setLoading(false);
     } catch (error) {
       console.error('fetchMessages: Error fetching messages:', error);
@@ -215,7 +113,7 @@ function App() {
     const interval = setInterval(() => {
       console.log('Polling for new messages...');
       fetchMessages();
-    }, 5000); // polling every 5 sec for now
+    }, 30000);
     return () => {
       clearInterval(interval);
       console.log('App unmounted. Stopped polling.');
@@ -253,7 +151,11 @@ function App() {
         />
       </div>
       <div className="chat-panel" style={chatPanelStyle}>
-        <ChatPanel messages={messages} phone={selectedPhone} onClose={() => setSelectedPhone(null)} />
+        <ChatPanel
+          messages={messages}
+          phone={selectedPhone}
+          onClose={() => setSelectedPhone(null)}
+        />
       </div>
     </div>
   );
@@ -395,13 +297,11 @@ function ChatBar({ phone }) {
       return;
     }
     try {
-      // Use a relative URL so it works on Vercel
-      const res = await fetch('/api/send-message', {
+      const res = await fetch('/api/send-message', {  // relative URL
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: phone, message: trimmed })
       });
-      
       const data = await res.json();
       if (data.success) {
         console.log('ChatBar: Message sent & logged to Google Sheet:', data);
@@ -413,6 +313,7 @@ function ChatBar({ phone }) {
       console.error('ChatBar: Error sending message:', err);
     }
   };
+  
 
   return (
     <div className="chat-bar">

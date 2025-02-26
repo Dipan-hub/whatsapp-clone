@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 
 function loadCredentials() {
-  // If GOOGLE_CREDENTIALS env var is provided, use it; otherwise, read the file
   if (process.env.GOOGLE_CREDENTIALS) {
     return JSON.parse(process.env.GOOGLE_CREDENTIALS);
   } else {
@@ -14,7 +13,7 @@ function loadCredentials() {
       const rawData = fs.readFileSync(localPath, 'utf8');
       return JSON.parse(rawData);
     } catch (err) {
-      console.error('Error reading local credentials JSON:', err);
+      console.error('Error reading credentials JSON:', err);
       throw err;
     }
   }
@@ -40,7 +39,7 @@ async function addRowToSheet(rowData, spreadsheetId, range = 'Sheet1!A:D') {
       values: [rowData],
     },
   });
-  console.log('Row appended successfully:', result.data.updates);
+  console.log('addRowToSheet: Row appended successfully:', result.data.updates);
   return result.data;
 }
 
