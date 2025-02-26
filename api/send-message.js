@@ -1,4 +1,3 @@
-// api/send-message.js
 require('dotenv').config();
 const axios = require('axios');
 
@@ -46,8 +45,12 @@ module.exports = async (req, res) => {
     await axios.post(herokuUrl, {
       phone: to,
       message: message,
-      timestamp: timestamp|| new Date().toISOString(),
+      timestamp: timestamp || new Date().toISOString(),
       isOutbound: '1'  // outgoing message flag
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
     console.log('Message logged to Google Sheet on Heroku.');
 
