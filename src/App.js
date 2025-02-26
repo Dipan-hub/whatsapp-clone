@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
-import { useMediaQuery } from 'react-responsive';  // npm install react-responsive
+import { useMediaQuery } from 'react-responsive';
 import './App.css';
 
 // Your published Google Sheet CSV URL
@@ -45,16 +45,13 @@ function getDateLabel(timestamp) {
   const today = new Date().toLocaleDateString('en-IN', options);
   const messageDay = messageDate.toLocaleDateString('en-IN', options);
 
-  // Today
   if (messageDay === today) return 'Today';
 
-  // Yesterday
   const yesterdayDate = new Date();
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
   const yesterday = yesterdayDate.toLocaleDateString('en-IN', options);
   if (messageDay === yesterday) return 'Yesterday';
 
-  // Otherwise, e.g. "25 Feb 2025"
   return messageDate.toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'short',
@@ -64,78 +61,44 @@ function getDateLabel(timestamp) {
 }
 
 /**
- * Transform the raw CSV data to handle:
- * 1) The special "bot" phone (918917602924) that sends outbound messages 
- *    in the form: "91XXXXXXXXXX - {text}".
- *    - We reassign the phone to 91XXXXXXXXXX, strip the prefix, and mark isOutbound=true.
- * 2) All other rows remain as inbound with isOutbound=false.
+ * New transformation function:  
+ * Simply convert each row into an object.  
+ * If an "isOutbound" field exists, use it; else default to "0".
  */
+// New transformation: simply convert each row into an object, using the isOutbound field if available.
 function transformMessages(rawData) {
   const transformed = [];
-
   rawData.forEach((row) => {
-    const phone = row.Phone;
-    const text = row.Message || ''; // handle empty or undefined
-    const time = row.Time;
-
-    // Check if this row is from the bot phone
-    if (phone === '918917602924') {
-      // Regex: "^(91\d+) - (.*)" => capture group1= "91XXXXXXXXXX", group2= message text
-      //const match = text.match(/^(91\d+)\s*-\s*(.*)/);
-      const match = text.match(/^(91\d+)\s*-\s*([\s\S]*)/);
-      if (match) {
-        // Then we treat it as a message in the conversation with match[1]
-        // and it's outbound
-        transformed.push({
-          Phone: match[1],
-          Message: match[2],
-          Time: time,
-          isOutbound: true,
-        });
-        return; // skip adding a normal inbound
-      }
-    }
-
-    // Otherwise, keep phone & text as inbound
     transformed.push({
-      Phone: phone,
-      Message: text,
-      Time: time,
-      isOutbound: false,
+      Phone: row.Phone,
+      Message: row.Message,
+      Time: row.Time,
+      isOutbound: row.isOutbound || '0'  // default to "0" (inbound) if not provided
     });
   });
-
   return transformed;
 }
-
+/*
 function App() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPhone, setSelectedPhone] = useState(null);
-
-  // We'll use react-responsive to detect mobile vs. desktop
   const isMobile = useMediaQuery({ maxWidth: 768 });
 
-  // Fetch & parse CSV data from Google Sheets
   const fetchMessages = async () => {
     console.log('fetchMessages: Starting to fetch messages...');
     try {
       const response = await fetch(GOOGLE_SHEET_API_URL);
       console.log('fetchMessages: Response received', response);
-
       const csvText = await response.text();
       console.log('fetchMessages: CSV text (first 100 chars):', csvText.slice(0, 100) + '...');
-
       const { data, errors } = Papa.parse(csvText, { header: true });
       if (errors.length) {
         console.error('fetchMessages: Errors parsing CSV:', errors);
       }
       console.log('fetchMessages: Parsed data:', data);
-
-      // Transform the data to handle bot messages
       const transformed = transformMessages(data);
       console.log('fetchMessages: Transformed data:', transformed);
-
       setMessages(transformed);
       setLoading(false);
     } catch (error) {
@@ -143,23 +106,19 @@ function App() {
     }
   };
 
-  // Auto-refresh every 20 seconds
   useEffect(() => {
     console.log('App mounted. Fetching initial data...');
     fetchMessages();
-
     const interval = setInterval(() => {
       console.log('Polling for new messages...');
       fetchMessages();
-    }, 20000);
-
+    }, 5000);
     return () => {
       clearInterval(interval);
       console.log('App unmounted. Stopped polling.');
     };
   }, []);
 
-  // Handle "Escape" key to go back
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape') {
@@ -171,21 +130,13 @@ function App() {
     return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
-  // Manual refresh function
   const handleManualRefresh = () => {
     console.log('Manual refresh triggered');
     fetchMessages();
   };
 
-  // For desktop (≥768px), we always show both columns.
-  // For mobile (<768px), show either the conversation list OR the chat panel, depending on selectedPhone.
-
-  const conversationPanelStyle = {
-    display: isMobile && selectedPhone ? 'none' : 'flex',
-  };
-  const chatPanelStyle = {
-    display: isMobile && !selectedPhone ? 'none' : 'flex',
-  };
+  const conversationPanelStyle = { display: isMobile && selectedPhone ? 'none' : 'flex' };
+  const chatPanelStyle = { display: isMobile && !selectedPhone ? 'none' : 'flex' };
 
   return (
     <div className="app-container">
@@ -199,50 +150,132 @@ function App() {
         />
       </div>
       <div className="chat-panel" style={chatPanelStyle}>
-        <ChatPanel
+        <ChatPanel messages={messages} phone={selectedPhone} onClose={() => setSelectedPhone(null)} />
+      </div>
+    </div>
+  );
+}
+  */
+
+
+function App() {
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPhone, setSelectedPhone] = useState(null);
+  const isMobile = useMediaQuery({ maxWidth: 768 });
+  
+  // Cache for last maximum timestamp and last fetch time (in milliseconds)
+  const lastMaxTimestamp = useRef(null);
+  const lastFetchTime = useRef(0);
+
+  const fetchMessages = async () => {
+    const now = Date.now();
+    if (now - lastFetchTime.current < 30000) { // less than 30 sec since last fetch
+      console.log(`fetchMessages: Last fetch was ${Math.floor((now - lastFetchTime.current)/1000)} sec ago. Skipping fetch.`);
+      return;
+    }
+    lastFetchTime.current = now;
+    
+    console.log('fetchMessages: Starting to fetch messages...');
+    try {
+      const response = await fetch(GOOGLE_SHEET_API_URL);
+      console.log('fetchMessages: Response received', response);
+      const csvText = await response.text();
+      console.log('fetchMessages: CSV text (first 100 chars):', csvText.slice(0, 100) + '...');
+      const { data, errors } = Papa.parse(csvText, { header: true });
+      if (errors.length) {
+        console.error('fetchMessages: Errors parsing CSV:', errors);
+      }
+      console.log('fetchMessages: Parsed data (count ' + data.length + '):', data);
+      const transformed = transformMessages(data);
+      console.log('fetchMessages: Transformed data (count ' + transformed.length + '):', transformed);
+
+      const newMaxTimestamp = transformed.reduce((max, row) => {
+        const t = Number(row.Time);
+        return t > max ? t : max;
+      }, 0);
+      console.log('fetchMessages: New max timestamp:', newMaxTimestamp);
+
+      if (lastMaxTimestamp.current && newMaxTimestamp <= lastMaxTimestamp.current) {
+        console.log('fetchMessages: No new data since last fetch. Skipping state update.');
+      } else {
+        console.log('fetchMessages: New data detected! Updating state.');
+        lastMaxTimestamp.current = newMaxTimestamp;
+        setMessages(transformed);
+      }
+      setLoading(false);
+    } catch (error) {
+      console.error('fetchMessages: Error fetching messages:', error);
+    }
+  };
+
+  useEffect(() => {
+    console.log('App mounted. Fetching initial data...');
+    fetchMessages();
+    const interval = setInterval(() => {
+      console.log('Polling for new messages...');
+      fetchMessages();
+    }, 5000); // polling every 5 sec for now
+    return () => {
+      clearInterval(interval);
+      console.log('App unmounted. Stopped polling.');
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        console.log('Escape key pressed, deselecting conversation...');
+        setSelectedPhone(null);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
+
+  const handleManualRefresh = () => {
+    console.log('Manual refresh triggered');
+    fetchMessages();
+  };
+
+  const conversationPanelStyle = { display: isMobile && selectedPhone ? 'none' : 'flex' };
+  const chatPanelStyle = { display: isMobile && !selectedPhone ? 'none' : 'flex' };
+
+  return (
+    <div className="app-container">
+      <div className="conversations-panel" style={conversationPanelStyle}>
+        <ConversationsPanel
           messages={messages}
-          phone={selectedPhone}
-          onClose={() => setSelectedPhone(null)}
+          loading={loading}
+          selectedPhone={selectedPhone}
+          onSelectPhone={setSelectedPhone}
+          onManualRefresh={handleManualRefresh}
         />
+      </div>
+      <div className="chat-panel" style={chatPanelStyle}>
+        <ChatPanel messages={messages} phone={selectedPhone} onClose={() => setSelectedPhone(null)} />
       </div>
     </div>
   );
 }
 
-/** 
- * LEFT COLUMN (desktop) or 
- * Entire screen (mobile if no conversation selected)
- */
 function ConversationsPanel({ messages, loading, selectedPhone, onSelectPhone, onManualRefresh }) {
   console.log('ConversationsPanel: messages:', messages);
-
-  // Group messages by phone
   const grouped = {};
   messages.forEach((msg) => {
     if (!grouped[msg.Phone]) grouped[msg.Phone] = [];
     grouped[msg.Phone].push(msg);
   });
-
-  // Build conversation summaries: sort each phone's messages by time desc
   const summaries = Object.keys(grouped).map((phone) => {
     const phoneMessages = grouped[phone].sort((a, b) => Number(b.Time) - Number(a.Time));
-    return {
-      phone,
-      lastMessage: phoneMessages[0].Message,
-      lastTime: phoneMessages[0].Time,
-    };
+    return { phone, lastMessage: phoneMessages[0].Message, lastTime: phoneMessages[0].Time };
   });
-
-  // Sort by lastTime desc
   summaries.sort((a, b) => Number(b.lastTime) - Number(a.lastTime));
-
   return (
     <div className="panel-container">
       <header className="panel-header">
         <h2>Conversations</h2>
-        <button className="refresh-button" onClick={onManualRefresh}>
-          Refresh
-        </button>
+        <button className="refresh-button" onClick={onManualRefresh}>Refresh</button>
       </header>
       <div className="panel-content">
         {loading ? (
@@ -251,9 +284,7 @@ function ConversationsPanel({ messages, loading, selectedPhone, onSelectPhone, o
           summaries.map((conv, index) => (
             <div
               key={index}
-              className={`conversation-item ${
-                selectedPhone === conv.phone ? 'selected-conversation' : ''
-              }`}
+              className={`conversation-item ${selectedPhone === conv.phone ? 'selected-conversation' : ''}`}
               onClick={() => {
                 console.log('Selected phone:', conv.phone);
                 onSelectPhone(conv.phone);
@@ -281,10 +312,6 @@ function ConversationsPanel({ messages, loading, selectedPhone, onSelectPhone, o
   );
 }
 
-/** 
- * RIGHT COLUMN (desktop) or 
- * Entire screen (mobile if a conversation is selected)
- */
 function ChatPanel({ messages, phone, onClose }) {
   if (!phone) {
     return (
@@ -298,21 +325,14 @@ function ChatPanel({ messages, phone, onClose }) {
       </div>
     );
   }
-
-  // Filter & sort messages for this phone (oldest first)
   const conversationMessages = messages
     .filter((msg) => msg.Phone === phone)
     .sort((a, b) => Number(a.Time) - Number(b.Time));
-
   console.log('ChatPanel: conversation messages for phone:', phone, conversationMessages);
-
   return (
     <div className="panel-container chat-panel-container">
       <header className="panel-header chat-header">
-        {/* Mobile only: show back button */}
-        <button className="back-button" onClick={onClose}>
-          &larr;
-        </button>
+        <button className="back-button" onClick={onClose}>&larr;</button>
         <img
           className="profile-pic-large"
           src={`https://ui-avatars.com/api/?name=${phone}&background=random`}
@@ -326,21 +346,13 @@ function ChatPanel({ messages, phone, onClose }) {
   );
 }
 
-/** 
- * Scrollable conversation area with date dividers. 
- * Oldest at the top, newest at the bottom. 
- * We rely on "isOutbound" in each msg to decide bubble style. 
- */
 function ChatConversation({ messages }) {
   const messagesEndRef = useRef(null);
-
-  // Auto-scroll to bottom whenever messages change
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
-
   if (messages.length === 0) {
     return (
       <div className="chat-messages">
@@ -348,7 +360,6 @@ function ChatConversation({ messages }) {
       </div>
     );
   }
-
   let lastDateLabel = '';
   return (
     <div className="chat-messages">
@@ -356,7 +367,6 @@ function ChatConversation({ messages }) {
         const currentLabel = getDateLabel(msg.Time);
         const showDivider = currentLabel !== lastDateLabel;
         lastDateLabel = currentLabel;
-
         return (
           <React.Fragment key={index}>
             {showDivider && (
@@ -364,7 +374,7 @@ function ChatConversation({ messages }) {
                 <span>{currentLabel}</span>
               </div>
             )}
-            <div className={`message-bubble ${msg.isOutbound ? 'outbound-bubble' : 'inbound-bubble'}`}>
+            <div className={`message-bubble ${msg.isOutbound === '1' ? 'outbound-bubble' : 'inbound-bubble'}`}>
               <div className="message-time">{formatTimeIST(msg.Time)}</div>
               <div className="message-text">{msg.Message}</div>
             </div>
@@ -376,69 +386,30 @@ function ChatConversation({ messages }) {
   );
 }
 
-/** 
- * A text input & button to simulate sending a message. 
- * Currently just logs to console. 
- */
-
-/*
 function ChatBar({ phone }) {
   const [input, setInput] = useState('');
-
-  const sendMessage = () => {
-    const trimmed = input.trim();
-    if (!trimmed) {
-      console.log('ChatBar: No message to send.');
-      return;
-    }
-    // Insert your actual WhatsApp API call here
-    console.log(`ChatBar: Sending message "${trimmed}" to phone: ${phone}`);
-    setInput('');
-  };
-
-  return (
-    <div className="chat-bar">
-      <input
-        type="text"
-        placeholder="Type your message..."
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-      />
-      <button onClick={sendMessage}>Send</button>
-    </div>
-  );
-}
-*/
-
-// Inside your ChatBar component (from the previous code)
-function ChatBar({ phone }) {
-  const [input, setInput] = useState('');
-
   const sendMessage = async () => {
     const trimmed = input.trim();
     if (!trimmed) {
       console.log('ChatBar: No message to send.');
       return;
     }
-
-    // 1) Send to our server's endpoint
     try {
-      const res = await fetch('http://localhost:3001/api/send-message', {
+      // Use a relative URL so it works on Vercel
+      const res = await fetch('/api/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: phone, message: trimmed })
       });
       const data = await res.json();
       if (data.success) {
-        console.log('Message sent & logged to Google Sheet:', data);
-        // Optionally clear input
+        console.log('ChatBar: Message sent & logged to Google Sheet:', data);
         setInput('');
-        // 2) Optionally trigger a refresh in your app or let your polling handle it
       } else {
-        console.error('Failed to send message:', data.error);
+        console.error('ChatBar: Failed to send message:', data.error);
       }
     } catch (err) {
-      console.error('Error sending message:', err);
+      console.error('ChatBar: Error sending message:', err);
     }
   };
 
