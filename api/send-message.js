@@ -42,16 +42,18 @@ module.exports = async (req, res) => {
 
     // Calling Heroku API to log message in Google Sheets
     const herokuUrl = 'https://heroku-whatsapp-bot-523b3af77ed7.herokuapp.com/api/update-sheet'; // Replace with actual Heroku URL
+    console.log("Triggering Heroku API to log message...");
     await axios.post(herokuUrl, {
       phone: to,
       message: message,
       timestamp: timestamp || new Date().toISOString(),
-      isOutbound: '1'  // outgoing message flag
+      isOutbound: '1'
     }, {
       headers: {
         'Content-Type': 'application/json'
       }
     });
+    console.log('Heroku API call made successfully.');
     console.log('Message logged to Google Sheet on Heroku.');
 
     return res.status(200).json({ success: true, result: sendResult });
