@@ -1,0 +1,137 @@
+// api/webhook.js
+require('dotenv').config();
+const axios = require('axios');
+const { addRowToSheet } = require('./googleSheetOperation.js');
+
+const SHEET_ID = process.env.GOOGLE_SPREADSHEET_ID;
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const ADMIN_NUMBER = '918917602924';
+
+function sendMessage(to, msgBody) {
+  const url = `https://graph.facebook.com/v16.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const data = {
+    messaging_product: "whatsapp",
+    to,
+    text: { body: msgBody }
+  };
+  console.log(`sendMessage: Sending message to ${to}: ${msgBody}`);
+  return axios.post(url, data, {
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
+  })
+    .then(response => {
+      console.log('sendMessage: Message sent:', response.data);
+      return response.data;
+    })
+    .catch(error => {
+      console.error('sendMessage: Error sending message:', error.response?.data || error.message);
+      throw error;
+    });
+}
+
+function forwardMessageToAdmin(from, msgBody) {
+  const url = `https://graph.facebook.com/v16.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const data = {
+    messaging_product: "whatsapp",
+    to: ADMIN_NUMBER,
+    text: {
+      body: `Message from ${from}: ${msgBody}`,
+      preview_url: false
+    }
+  };
+  console.log(`forwardMessageToAdmin: Forwarding message from ${from} to admin.`);
+  return axios.post(url, data, {
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
+  })
+    .then(response => {
+      console.log('forwardMessageToAdmin: Message forwarded:', response.data);
+    })
+    .catch(error => {
+      console.error('forwardMessageToAdmin: Error forwarding message:', error.response?.data || error.message);
+    });
+}
+
+module.exports = async (req, res) => {
+  try {
+    console.log('webhook.js: Received request method:', req.method);
+
+    if (req.method === 'GET') {
+      // Verification handshake
+      const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+      const mode = req.query["hub.mode"];
+      const token = req.query["hub.verify_token"];
+      const challenge = req.query["hub.challenge"];
+      console.log(`webhook.js: Verification: mode=${mode}, token=${token}, challenge=${challenge}`);
+      if (mode === "subscribe" && token === VERIFY_TOKEN) {
+        console.log("webhook.js: WEBHOOK VERIFIED!");
+        return res.status(200).send(challenge);
+      } else {
+        console.log("webhook.js: WEBHOOK VERIFICATION FAILED!");
+        return res.sendStatus(403);
+      }
+    }
+
+    if (req.method === 'POST') {
+      console.log('webhook.js: POST request body:', JSON.stringify(req.body));
+      const body = req.body;
+      if (!body.object) {
+        console.log("webhook.js: No object in body.");
+        return res.sendStatus(404);
+      }
+      const webhookEvent = body.entry?.[0]?.changes?.[0]?.value;
+      if (!webhookEvent) {
+        console.log("webhook.js: No webhook event found.");
+        return res.sendStatus(404);
+      }
+
+      // Process payment statuses if present
+      if (webhookEvent.statuses) {
+        webhookEvent.statuses.forEach(async (status) => {
+          if (status.type === 'payment') {
+            console.log("webhook.js: Payment Status Update:", JSON.stringify(status, null, 2));
+            // (Add your payment handling logic here)
+          }
+        });
+      }
+
+      // Process messages
+      const messages = webhookEvent.messages;
+      if (messages && messages.length > 0) {
+        const message = messages[0];
+        const from = message.from;
+        const msgBody = message.text?.body;
+        console.log(`webhook.js: Processing message from ${from}: ${msgBody}`);
+
+        // Log message to Google Sheets
+        try {
+          await addRowToSheet([from, msgBody, message.timestamp || new Date().toISOString(), '0'], SHEET_ID);
+          console.log('webhook.js: Message logged to Google Sheets.');
+        } catch (err) {
+          console.error('webhook.js: Error logging message to Google Sheets:', err);
+        }
+
+        // Forward non-admin messages to admin
+        if (from !== ADMIN_NUMBER) {
+          await forwardMessageToAdmin(from, msgBody);
+        } else {
+          // Admin message logic: if admin sends "phone - message"
+          const parts = msgBody.split(" - ");
+          if (parts.length === 2) {
+            const targetUser = parts[0].trim();
+            const replyMessage = parts[1].trim();
+            console.log(`webhook.js: Admin forwarding message to ${targetUser}: ${replyMessage}`);
+            await sendMessage(targetUser, replyMessage);
+          } else {
+            console.error("webhook.js: Admin message format incorrect.");
+          }
+        }
+      }
+      return res.sendStatus(200);
+    } else {
+      return res.status(405).send("Method Not Allowed");
+    }
+  } catch (err) {
+    console.error("webhook.js: Error in webhook function:", err);
+    return res.status(500).send("Internal Server Error");
+  }
+};

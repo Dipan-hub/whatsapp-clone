@@ -1,38 +1,283 @@
-.App {
-  text-align: center;
+/* Base reset & font */
+* {
+  box-sizing: border-box;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #ddd;
+  /* Prevent horizontal scrolling if messages are very long */
+  overflow-x: hidden;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+/* Layout container: two columns on desktop, single column on mobile */
+.app-container {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  overflow-x: hidden; /* hide horizontal overflow */
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+/* Panel for conversations list (left side on desktop) */
+.conversations-panel {
+  width: 30%;
+  min-width: 280px;
+  max-width: 400px;
+  background-color: #f5f5f5;
+  border-right: 1px solid #ccc;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+  flex-shrink: 0; /* Don’t shrink below min-width */
+}
+
+/* Panel for chat (right side on desktop) */
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* Panel container for shared styling */
+.panel-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Sticky header for each panel */
+.panel-header {
+  background-color: #075e54;
   color: white;
+  padding: 10px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-.App-link {
-  color: #61dafb;
+/* "Refresh" button in the conversation header */
+.refresh-button {
+  margin-left: auto;
+  background-color: #fff;
+  color: #075e54;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+.refresh-button:hover {
+  background-color: #ddd;
+}
+
+/* Panel content area, scrollable */
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #ece5dd;
+}
+
+/* ========== Conversations List Panel ========== */
+.conversation-item {
+  display: flex;
+  align-items: center;
+  background-color: #fff;
+  margin: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.conversation-item:hover {
+  background-color: #f0f0f0;
+}
+
+.selected-conversation {
+  border: 2px solid #075e54;
+}
+
+.profile-pic {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  margin-right: 8px;
+  object-fit: cover;
+}
+
+.conversation-details {
+  flex: 1;
+  overflow: hidden;
+}
+
+.conversation-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85em;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.conversation-body {
+  font-size: 0.9em;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ========== Chat Panel ========== */
+.chat-panel-container {
+  position: relative;
+  background-color: #f5f5f5;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.back-button {
+  display: none; /* hidden on desktop, shown on mobile */
+  background-color: #fff;
+  color: #075e54;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.profile-pic-large {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* The scrollable area for messages */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #ece5dd;
+  padding: 10px;
+}
+
+/* 
+   Bubbles: 
+   - inbound on the left (white)
+   - outbound on the right (greenish)
+*/
+.message-bubble {
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  max-width: 70%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  word-wrap: break-word; 
+  white-space: pre-wrap; 
+  overflow-wrap: anywhere; /* break long URLs/words */
+  position: relative;
+}
+
+/* Inbound (left) */
+.inbound-bubble {
+  margin-left: 0;
+  margin-right: auto;
+  background-color: #fff;
+}
+
+/* Outbound (right) */
+.outbound-bubble {
+  margin-left: auto;
+  margin-right: 0;
+  background-color: #dcf8c6; /* typical WhatsApp green bubble */
+}
+
+/* Narrower bubbles on desktop if desired */
+@media (min-width: 768px) {
+  .message-bubble {
+    max-width: 50%;
   }
-  to {
-    transform: rotate(360deg);
+}
+
+.message-time {
+  font-size: 0.75em;
+  color: #777;
+  margin-bottom: 4px;
+}
+
+.message-text {
+  font-size: 0.95em;
+  color: #333;
+}
+
+/* Date divider */
+.date-divider {
+  text-align: center;
+  margin: 15px 0;
+  font-size: 0.85em;
+  color: #555;
+  font-weight: bold;
+}
+
+/* Chat input bar at bottom */
+.chat-bar {
+  display: flex;
+  background-color: #fff;
+  border-top: 1px solid #ccc;
+  padding: 10px;
+}
+
+.chat-bar input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  font-size: 1em;
+}
+
+.chat-bar button {
+  margin-left: 10px;
+  background-color: #075e54;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.chat-bar button:hover {
+  background-color: #064f48;
+}
+
+/* Empty states, etc. */
+.loading-text,
+.empty-message {
+  padding: 10px;
+  text-align: center;
+  color: #666;
+}
+
+/* ========== Responsive for Mobile (<768px) ========== */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .conversations-panel,
+  .chat-panel {
+    width: 100%;
+  }
+
+  /* The left or right panel is hidden conditionally in JS (inline styles) */
+
+  /* Show the back button on mobile */
+  .chat-header .back-button {
+    display: inline-block;
   }
 }
