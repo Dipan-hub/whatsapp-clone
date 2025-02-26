@@ -1,13 +1,12 @@
 // api/send-message.js
 require('dotenv').config();
 const axios = require('axios');
-const { addRowToSheet } = require('./googleSheetOperation');
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const SHEET_ID = process.env.GOOGLE_SPREADSHEET_ID;
 const ADMIN_NUMBER = '918917602924';
 
+// Function to send WhatsApp message
 async function sendWhatsAppMessage(to, message) {
   const url = `https://graph.facebook.com/v16.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
   const data = {
@@ -38,16 +37,20 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Missing "to" or "message".' });
   }
   try {
+    // Sending WhatsApp message
     const sendResult = await sendWhatsAppMessage(to, message);
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    // Add the row to Google Sheets (on Heroku side)
-    await axios.post('https://heroku-whatsapp-bot-523b3af77ed7.herokuapp.com/api/update-sheet', {
+
+    // Calling Heroku API to log message in Google Sheets
+    const herokuUrl = 'https://heroku-whatsapp-bot-523b3af77ed7.herokuapp.com/api/update-sheet'; // Replace with actual Heroku URL
+    await axios.post(herokuUrl, {
       phone: to,
       message: message,
-      timestamp: new Date().toISOString(),
-      isOutbound: '1' // outgoign message
+      timestamp: timestamp|| new Date().toISOString(),
+      isOutbound: '1'  // outgoing message flag
     });
     console.log('Message logged to Google Sheet on Heroku.');
+
     return res.status(200).json({ success: true, result: sendResult });
   } catch (error) {
     console.error('send-message.js: Error:', error);
