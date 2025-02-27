@@ -83,6 +83,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPhone, setSelectedPhone] = useState(null);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
   const isMobile = useMediaQuery({ maxWidth: 768 });
 
   // Updated fetchMessages with timestamp comparison
@@ -108,6 +109,7 @@ function App() {
       // If the latest message timestamp is greater than the last fetched timestamp, update the state
       if (latestMessageTimestamp > lastFetchedTimestamp) {
         console.log('New data detected, updating state.');
+        setLastSyncTime(formatTimeIST(latestMessageTimestamp));
         lastFetchedTimestamp = latestMessageTimestamp;  // Update the timestamp
         setMessages(transformed);
         setLoading(false);
@@ -154,12 +156,16 @@ function App() {
   return (
     <div className="app-container">
       <div className="conversations-panel" style={conversationPanelStyle}>
+      <div style={{ padding: '10px', backgroundColor: '#075e54', color: 'white', textAlign: 'center' }}>
+        {lastSyncTime && <div>Last Sync: {lastSyncTime}</div>}
+      </div>
         <ConversationsPanel
           messages={messages}
           loading={loading}
           selectedPhone={selectedPhone}
           onSelectPhone={setSelectedPhone}
           onManualRefresh={handleManualRefresh}
+          lastSyncTime={lastSyncTime}
         />
       </div>
       <div className="chat-panel" style={chatPanelStyle}>
@@ -174,7 +180,7 @@ function App() {
 }
 
 
-function ConversationsPanel({ messages, loading, selectedPhone, onSelectPhone, onManualRefresh }) {
+function ConversationsPanel({ messages, loading, selectedPhone, onSelectPhone, onManualRefresh ,lastSyncTime}) {
   console.log('ConversationsPanel: messages:', messages);
   const grouped = {};
   messages.forEach((msg) => {
@@ -191,6 +197,11 @@ function ConversationsPanel({ messages, loading, selectedPhone, onSelectPhone, o
       <header className="panel-header">
         <h2>Conversations</h2>
         <button className="refresh-button" onClick={onManualRefresh}>Refresh</button>
+              {/* Sync Info below the refresh button */}
+       <div className="sync-info">
+        {lastSyncTime && <div>Last Sync: {lastSyncTime}</div>}
+      </div>
+
       </header>
       <div className="panel-content">
         {loading ? (
