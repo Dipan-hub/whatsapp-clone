@@ -197,11 +197,6 @@ function ConversationsPanel({ messages, loading, selectedPhone, onSelectPhone, o
       <header className="panel-header">
         <h2>Conversations</h2>
         <button className="refresh-button" onClick={onManualRefresh}>Refresh</button>
-              {/* Sync Info below the refresh button */}
-       <div className="sync-info">
-        {lastSyncTime && <div>Last Sync: {lastSyncTime}</div>}
-      </div>
-
       </header>
       <div className="panel-content">
         {loading ? (
