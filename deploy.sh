@@ -7,7 +7,7 @@ read commit_message
 # Execute the Git commands
 git add .
 git commit -m "$commit_message"
-git push origin main
+git push origin master
 
 
 ########################################
